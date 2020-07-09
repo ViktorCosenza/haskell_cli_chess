@@ -27,15 +27,27 @@ pieceStr p
     | p == King   = "K"
 
 
-chunkPiece Space                    = "."
-chunkPiece (ChessPiece White piece) = pieceStr piece & Rainbow.fore Rainbow.magenta--(Rainbow.blue <> Rainbow.only256 Rainbow.blue)
-chunkPiece (ChessPiece Black piece) = pieceStr piece & Rainbow.fore Rainbow.green--(Rainbow.red <> Rainbow.only256 Rainbow.red)
+chunkPiece Space                    = " ."
+chunkPiece (ChessPiece White piece) = " " <> pieceStr piece & Rainbow.fore Rainbow.magenta--(Rainbow.blue <> Rainbow.only256 Rainbow.blue)
+chunkPiece (ChessPiece Black piece) = " " <> pieceStr piece & Rainbow.fore Rainbow.green--(Rainbow.red <> Rainbow.only256 Rainbow.red)
 
 elemToChunk (r, c) e = if c == 8 then chunk <> "\n" else chunk
         where 
             chunk = chunkPiece e
 
-getChessboardStr = Matrix.toList . Matrix.mapPos elemToChunk
+insertEvery :: Int -> [a] -> [a] -> [a]
+insertEvery 0 _ as = as
+insertEvery n es as 
+    | null es        = as
+    | length as < n = head es : as
+    | otherwise      = head es : take n as ++ insertEvery n (tail es) (drop n as)
+            
+            
+
+getChessboardStr :: Matrix.Matrix ChessPiece -> [Rainbow.Chunk]
+getChessboardStr c = 
+    "   A B C D E F G H \n":
+    (insertEvery 8 (reverse ["1 ", "2 ", "3 ", "4 ", "5 ", "6 ", "7 ", "8 "]) . Matrix.toList . Matrix.mapPos elemToChunk) c
 
 initialPosition :: (Int, Int) -> ChessPiece
 initialPosition (x, y) 
