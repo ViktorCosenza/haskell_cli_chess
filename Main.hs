@@ -63,4 +63,6 @@ initialPosition (x, y)
         player = if x <= 2 then White else Black 
         createPiece p = ChessPiece player p
 
-main = Rainbow.putChunksLn $ getChessboardStr (Matrix.matrix 8 8 initialPosition)
+printChessboard = Rainbow.putChunksLn . getChessboardStr
+
+main = printChessboard (Matrix.matrix 8 8 initialPosition)
