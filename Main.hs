@@ -1,9 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-
 import qualified Data.Matrix as Matrix
 import qualified Rainbow
 import Data.Function ((&))
+import Data.Char(ord, toLower)
+import System.IO
 
 data Player = Black | White deriving (Show, Eq)
 data Piece = Pawn 
@@ -26,6 +27,30 @@ pieceStr p
     | p == Queen  = "Q"
     | p == King   = "K"
 
+setMatrixElem :: a -> (Int, Int) -> Matrix.Matrix a -> Matrix.Matrix a
+setMatrixElem a pos = Matrix.mapPos f
+    where f p
+            | p == pos = const a
+            | otherwise = id
+
+
+
+rawMovePiece :: (Int, Int) -> (Int, Int) -> Matrix.Matrix ChessPiece -> Matrix.Matrix ChessPiece
+rawMovePiece (x1, y1) (x2, y2) m = (setMatrixElem Space p1  . setMatrixElem from p2) m 
+    where 
+        from = m Matrix.! p1
+        p1 = (x1, y1)
+        p2 = (x2, y2)
+
+letterToPos :: Char -> Int
+letterToPos = (+)(-96) . ord . toLower
+
+movePiece :: (Char, Int) -> (Char, Int) -> Matrix.Matrix ChessPiece -> Matrix.Matrix ChessPiece
+movePiece (l1, x1) (l2, x2) = rawMovePiece p1 p2
+    where 
+        p1 = (9 - x1, letterToPos l1)
+        p2 = (9 - x2, letterToPos l2)
+        
 
 chunkPiece Space                    = " ."
 chunkPiece (ChessPiece White piece) = " " <> pieceStr piece & Rainbow.fore Rainbow.magenta--(Rainbow.blue <> Rainbow.only256 Rainbow.blue)
@@ -38,11 +63,12 @@ elemToChunk (r, c) e = if c == 8 then chunk <> "\n" else chunk
 insertEvery :: Int -> [a] -> [a] -> [a]
 insertEvery 0 _ as = as
 insertEvery n es as 
-    | null es        = as
+    | null es       = as
     | length as < n = head es : as
-    | otherwise      = head es : take n as ++ insertEvery n (tail es) (drop n as)
+    | otherwise     = head es : take n as ++ insertEvery n (tail es) (drop n as)
             
             
+
 
 getChessboardStr :: Matrix.Matrix ChessPiece -> [Rainbow.Chunk]
 getChessboardStr c = 
@@ -60,9 +86,40 @@ initialPosition (x, y)
     | y == 5           = createPiece King
     | otherwise        = Space
     where 
-        player = if x <= 2 then White else Black 
+        player = if x <= 2 then White else Black
         createPiece p = ChessPiece player p
+
+initialChessboard :: Matrix.Matrix ChessPiece
+initialChessboard = (Matrix.matrix 8 8 initialPosition)
 
 printChessboard = Rainbow.putChunksLn . getChessboardStr
 
-main = printChessboard (Matrix.matrix 8 8 initialPosition)
+allowedLetters :: String
+allowedLetters = "abcdefgh"
+
+allowedNumbers :: String
+allowedNumbers = "12345678"
+
+allowedSymbols :: String
+allowedSymbols = ",()"
+
+allowedCharacters :: String
+allowedCharacters = allowedLetters ++ allowedNumbers ++ allowedSymbols
+
+filterChar :: [Char] -> Char -> Bool
+filterChar fs c = let bs = map (== c) fs in foldr (||) False bs
+
+filterString :: [Char] -> String -> String
+filterString fs = (filter (filterChar fs)) . (map toLower)
+
+validChessMovestring :: String -> Bool
+validChessMovestring (l1:x1:l2:x2:[]) = foldl (&&) True ((map charf (l1:l2:"")) ++ (map numberf (x1:x2:"")))
+    where 
+            charf = filterChar allowedCharacters
+            numberf = filterChar allowedNumbers
+validChessMovestring _ = False
+
+main = do 
+    line <- getLine
+    putStrLn line
+    printChessboard initialChessboard
