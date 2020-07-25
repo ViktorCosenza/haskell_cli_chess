@@ -113,13 +113,54 @@ filterString :: [Char] -> String -> String
 filterString fs = (filter (filterChar fs)) . (map toLower)
 
 validChessMovestring :: String -> Bool
-validChessMovestring (l1:x1:l2:x2:[]) = foldl (&&) True ((map charf (l1:l2:"")) ++ (map numberf (x1:x2:"")))
+validChessMovestring (l1:x1:l2:x2:[]) = (l1 /= l2 || x1 /=x2) && foldl (&&) True ((map charf (l1:l2:"")) ++ (map numberf (x1:x2:"")))
     where 
-            charf = filterChar allowedCharacters
+            charf = filterChar allowedLetters
             numberf = filterChar allowedNumbers
 validChessMovestring _ = False
 
-main = do 
+
+endGame :: Player -> IO()
+endGame player = putStrLn $ winnerMsg player
+    where 
+        winnerMsg White = "White won!"
+        winnerMsg Black = "Black won!"
+
+
+
+parseInput :: IO ((Bool, [Char]))
+parseInput = do
     line <- getLine
-    putStrLn line
-    printChessboard initialChessboard
+    let lower = map toLower line
+    let noSpace = filter (/= ' ') lower 
+    return (validChessMovestring noSpace, noSpace)
+
+validChessMove :: String -> Bool
+validChessMove = const True
+
+gameTick :: Player -> Matrix.Matrix ChessPiece -> String -> (Player, Matrix.Matrix ChessPiece)
+gameTick player board move 
+    | validChessMove move = (player, board)
+    | otherwise = (nextPlayer player, board)
+        where 
+            nextPlayer White = Black
+            nextPlayer Black = White
+
+gameLoop :: Player -> Matrix.Matrix ChessPiece -> IO() 
+gameLoop player board = do
+    putStrLn $ show player ++ " to move:"
+    {-- Parse user input and check--}
+    (isValidMove, move) <- parseInput
+    putStrLn $ "Valid: " ++ show isValidMove
+    putStrLn $ "Move: " ++ show move
+
+    {-- Check if move is valid within chess rules --}
+    
+    {-- Move piece logic --}
+    
+    printChessboard board
+    {-- Next move --}
+    let (nextPlayer, nextBoard) = gameTick player board move
+    gameLoop nextPlayer nextBoard
+
+main = gameLoop White initialChessboard
