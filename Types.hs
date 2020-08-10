@@ -2,6 +2,7 @@ module Types where
 import Data.Matrix(Matrix)
 
 data Player = Black | White deriving (Show, Eq)
+
 data Piece = Pawn 
     | Rook
     | Knight

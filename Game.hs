@@ -1,11 +1,93 @@
 module Game where
-
 import Data.Matrix(matrix, (!))
 
 import Types
 import Input
 import Output
 import Utils
+
+emptyCell :: (Int, Int) -> ChessBoard -> Bool
+emptyCell = isEmpty Space
+
+findFirst :: [(Int, Int)] -> ChessBoard -> ChessPiece
+findFirst ps board = first 
+    where 
+        first   = (((!) board) . snd . head . reverse) (zip (mapUntilTaken ps) ps) 
+        mapOccupied = map (\pos -> emptyCell pos board)
+        mapUntilTaken ps = takeWhileWithFirst id (mapOccupied ps)
+
+checkAttackerIn :: [Piece] -> Player -> [(Int, Int)] -> ChessBoard -> Bool
+checkAttackerIn attackers pl ps board = elem (piece first) attackers && pl /= player first
+    where first = findFirst ps board 
+
+checkLine :: Player -> [(Int, Int)] -> ChessBoard -> Bool
+checkLine = checkAttackerIn [Queen, Rook]
+
+checkDiag :: Player -> [(Int, Int)] -> ChessBoard -> Bool
+checkDiag = checkAttackerIn [Queen, Bishop]
+
+checkPawn :: Player -> (Int, Int) -> ChessBoard -> Bool
+checkPawn p (x, y) board = length pawns /= 0
+    where 
+        pawns = filter (\pc -> piece pc == Pawn) attackers
+        attackers = filter (\piece -> player piece /= p) pieces
+        pieces = map (\position -> board ! position) positions 
+        positions = (filter isValidPos . map (\offX -> (offX, yOffset))) [x + 1, x - 1]
+        yOffset = if p == White then 1 else -1
+
+checkKing :: Player -> (Int, Int) -> ChessBoard -> Bool
+checkKing p (x, y) board = length king /= 0
+    where 
+        king = filter (\pc -> piece pc == King) attackers
+        attackers = filter (\piece -> player piece /= p) pieces
+        pieces = map (\position -> board ! position) positions 
+        positions = (filter isValidPos . map (\(offX, offY) -> (x + offX, y + offY))) offsets
+        offsets = foldl (++) [] $ map (\off1 -> (map (\off2 -> (off1, off2)) [-1..1])) [-1..1]
+
+checkKnight :: Player -> (Int, Int) -> ChessBoard -> Bool
+checkKnight p (x, y) board = length knights /= 0
+    where
+        knights = filter (\pc -> piece pc == Knight) attackers
+        attackers = filter (\piece -> player piece /= p) pieces
+        pieces = map (\position -> board ! position) positions
+        positions = (filter isValidPos . map (\(offX, offY) -> (x + offX, y + offY))) offsets ++ reverse offsets 
+        offsets = [(2, 1), (1, 2), (-2, 1), (2, -1), (-2, -1)]
+
+verticalLine :: Int -> [Int] -> [(Int, Int)]
+verticalLine x = map (\y -> (x, y))
+
+horizontalLine :: Int -> [Int] -> [(Int, Int)]
+horizontalLine y = map (\x -> (x, y)) 
+
+stepLine :: Int -> (Int, Int) -> (Int, Int) -> [(Int, Int)]
+stepLine length (x, y) (stepX, stepY) = map getStep [1..length]
+    where getStep currStep = (x + currStep * stepX, y + currStep * stepY) 
+
+checkVerticalAttack :: Player -> (Int, Int) -> ChessBoard -> Bool
+checkVerticalAttack p (x, y) board = 
+    (checkLine p v1 board) || 
+    (checkLine p v2 board) ||
+    (checkLine p h1 board) ||
+    (checkLine p h2 board) 
+        where
+            v1 = verticalLine x [1..y - 1]
+            v2 = verticalLine x [y + 1..8]
+            h1 = horizontalLine y [1..x -1]
+            h2 = horizontalLine y [x + 1..8]
+
+checkDiagonalAttack :: Player -> (Int, Int) -> ChessBoard -> Bool
+checkDiagonalAttack p (x, y) board = foldl (||) False attacks
+        where
+            attacks = map (\d -> checkDiag p d board) diags
+            diags = map (stepLine 8 (x, y)) offsets
+            offsets = [(1, 1), (1, -1), (-1, 1), (-1, -1)]
+
+attackedCell :: Player -> (Int, Int) -> ChessBoard -> Bool
+attackedCell pl pos board = 
+    (checkVerticalAttack pl pos board) ||
+    (checkDiagonalAttack pl pos board) ||
+    (checkPawn pl pos board) ||
+    (checkKing pl pos board)
 
 initialChessboard :: ChessBoard
 initialChessboard = (matrix 8 8 initialPosition)
@@ -24,7 +106,6 @@ initialPosition (x, y)
         player = if x <= 2 then White else Black
         createPiece p = ChessPiece player p
 
-
 rawMovePiece :: ChessMove -> ChessBoard -> ChessBoard
 rawMovePiece ((x1, y1), (x2, y2)) m = (setMatrixElem Space p1  . setMatrixElem from p2) m 
     where 
@@ -32,13 +113,26 @@ rawMovePiece ((x1, y1), (x2, y2)) m = (setMatrixElem Space p1  . setMatrixElem f
         p1 = (x1, y1)
         p2 = (x2, y2)
 
-validChessMove :: String -> Bool
-validChessMove _ = True
+validPawnMove :: ChessMove -> ChessBoard -> Bool
+validPawnMove ((x1, y1), (x2, y2)) board 
+    | y1 == y2 && x2 == x1 + 1 && emptyCell (x2, y2) board = True
+    | otherwise = False
+
+validPieceMove :: Piece -> ChessMove -> ChessBoard -> Bool
+validPieceMove Pawn = validPawnMove
+
+validChessMove :: Player -> ChessMove -> ChessBoard -> Bool
+validChessMove p (from, to) board
+    | p /= player chesspiece = False
+    | otherwise = validPieceMove rawPiece (from, to) board
+    where 
+        chesspiece = board ! from
+        rawPiece = piece chesspiece 
 
 gameTick :: Player -> ChessBoard -> String -> (Player, ChessBoard)
-gameTick player board moveStr
-    | not (validChessMove moveStr) = (player, board)
-    | otherwise = (nextPlayer player, board)
+gameTick p board moveStr
+    | not (validChessMove p move board) = (p, board)
+    | otherwise = (nextPlayer p, board)
         where 
             move = toChessMove (moveStr)
             nextPlayer White = Black
@@ -48,12 +142,13 @@ gameLoop :: Player -> ChessBoard -> IO()
 gameLoop player board = do
     printChessboard board
     putStrLn $ show player ++ " to move:"
-
     {-- Parse user input and check--}
     (isValidMove, moveStr) <- parseInput
-
+    
     putStrLn $ "Valid: " ++ show isValidMove
     putStrLn $ "Move: " ++ show moveStr
     {-- Next move --}
-    let (nextPlayer, nextBoard) = gameTick player board moveStr
-    gameLoop nextPlayer nextBoard
+    if not isValidMove then gameLoop player board
+    else 
+        let (nextPlayer, nextBoard) = gameTick player board moveStr
+        in gameLoop nextPlayer nextBoard
