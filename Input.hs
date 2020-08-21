@@ -1,5 +1,5 @@
 module Input where
-import Data.Char(ord, toLower)
+import Data.Char(ord, toLower, digitToInt)
 
 allowedLetters :: String
 allowedLetters = "abcdefgh"
@@ -39,6 +39,6 @@ parseInput = do
 toChessMove :: String -> ((Int, Int), (Int, Int))
 toChessMove (l1:x1:l2:x2:[]) = (p1, p2)
     where 
-        p1 = (9 - ord x1, letterToPos l1)
-        p2 = (9 - ord x2, letterToPos l2)
-toChessMove _ = ((-1, -1), (-1, -1))
+        p1 = (9 - digitToInt x1, letterToPos l1)
+        p2 = (9 - digitToInt x2, letterToPos l2)
+toChessMove _ = error "Invalid move" --((-1, -1), (-1, -1))

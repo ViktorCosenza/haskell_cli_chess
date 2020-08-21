@@ -13,12 +13,6 @@ takeWhileWithFirst f as
     | otherwise = heads ++ [at (1 + length heads) as]
     where heads = takeWhile f as
 
-setMatrixElem :: a -> (Int, Int) -> Matrix a -> Matrix a
-setMatrixElem a pos = mapPos f
-    where f p
-            | p == pos = const a
-            | otherwise = id
-
 isEmpty :: Eq a => a -> (Int, Int) -> Matrix a -> Bool
 isEmpty empty pos m 
     | m ! pos == empty = True

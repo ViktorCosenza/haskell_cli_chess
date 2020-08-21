@@ -1,5 +1,5 @@
 module Game where
-import Data.Matrix(matrix, (!))
+import Data.Matrix(matrix, (!), setElem)
 
 import Types
 import Input
@@ -103,26 +103,33 @@ initialPosition (x, y)
     | y == 5           = createPiece King
     | otherwise        = Space
     where 
-        player = if x <= 2 then White else Black
+        player = if x <= 2 then Black else White
         createPiece p = ChessPiece player p
 
 rawMovePiece :: ChessMove -> ChessBoard -> ChessBoard
-rawMovePiece ((x1, y1), (x2, y2)) m = (setMatrixElem Space p1  . setMatrixElem from p2) m 
+rawMovePiece ((x1, y1), (x2, y2)) m = (setElem Space p1   . setElem piece p2) m 
     where 
-        from = m ! p1
+        piece = m ! p1
         p1 = (x1, y1)
         p2 = (x2, y2)
 
 validPawnMove :: ChessMove -> ChessBoard -> Bool
 validPawnMove ((x1, y1), (x2, y2)) board 
-    | y1 == y2 && x2 == x1 + 1 && emptyCell (x2, y2) board = True
+    | y1 == y2 && x2 == x1 + 1 && hasPiece (x2, y2) = True
+    | y1 /= y2 = False
+    | not (hasPiece (x2, y2)) = False
+    | x1 == 2 && x2 == 3 = True
+    | x1 == 2 && x2 == 4 && hasPiece (3, y2) = True
     | otherwise = False
+        where hasPiece pos = emptyCell pos board 
 
 validPieceMove :: Piece -> ChessMove -> ChessBoard -> Bool
-validPieceMove Pawn = validPawnMove
+--validPieceMove Pawn = validPawnMove
+validPieceMove _ = \m b -> True
 
 validChessMove :: Player -> ChessMove -> ChessBoard -> Bool
 validChessMove p (from, to) board
+    | chesspiece == Space = False
     | p /= player chesspiece = False
     | otherwise = validPieceMove rawPiece (from, to) board
     where 
@@ -132,7 +139,7 @@ validChessMove p (from, to) board
 gameTick :: Player -> ChessBoard -> String -> (Player, ChessBoard)
 gameTick p board moveStr
     | not (validChessMove p move board) = (p, board)
-    | otherwise = (nextPlayer p, board)
+    | otherwise = (nextPlayer p, rawMovePiece move board)
         where 
             move = toChessMove (moveStr)
             nextPlayer White = Black
@@ -142,6 +149,7 @@ gameLoop :: Player -> ChessBoard -> IO()
 gameLoop player board = do
     printChessboard board
     putStrLn $ show player ++ " to move:"
+
     {-- Parse user input and check--}
     (isValidMove, moveStr) <- parseInput
     
@@ -149,6 +157,11 @@ gameLoop player board = do
     putStrLn $ "Move: " ++ show moveStr
     {-- Next move --}
     if not isValidMove then gameLoop player board
-    else 
-        let (nextPlayer, nextBoard) = gameTick player board moveStr
-        in gameLoop nextPlayer nextBoard
+    else let (nextPlayer, nextBoard) = gameTick player board moveStr
+        in if nextPlayer == player 
+            then do
+                putStrLn $ "Invalid move! Try again..."
+                gameLoop nextPlayer nextBoard
+            else do 
+                putStr $ "Moved"
+                gameLoop nextPlayer nextBoard

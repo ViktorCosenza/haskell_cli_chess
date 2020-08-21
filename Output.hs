@@ -31,5 +31,5 @@ elemToChunk (r, c) e = if c == 8 then chunk <> "\n" else chunk
 
 chunkPiece :: ChessPiece -> Chunk
 chunkPiece Space                    = " ."
-chunkPiece (ChessPiece White piece) = " " <> pieceStr piece & fore magenta--(blue <> only256 blue)
-chunkPiece (ChessPiece Black piece) = " " <> pieceStr piece & fore green--(Rainbow.red <> Rainbow.only256 Rainbow.red)
+chunkPiece (ChessPiece White piece) = " " <> pieceStr piece & fore green--(blue <> only256 blue)
+chunkPiece (ChessPiece Black piece) = " " <> pieceStr piece & fore magenta--(Rainbow.red <> Rainbow.only256 Rainbow.red)
