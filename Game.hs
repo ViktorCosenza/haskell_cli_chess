@@ -115,13 +115,19 @@ rawMovePiece ((x1, y1), (x2, y2)) m = (setElem Space p1   . setElem piece p2) m
 
 validPawnMove :: ChessMove -> ChessBoard -> Bool
 validPawnMove ((x1, y1), (x2, y2)) board 
-    | y1 == y2 && x2 == x1 + 1 && hasPiece (x2, y2) = True
-    | y1 /= y2 = False
-    | not (hasPiece (x2, y2)) = False
-    | x1 == 2 && x2 == 3 = True
-    | x1 == 2 && x2 == 4 && hasPiece (3, y2) = True
+    | elem (x2, y2) diags && hasPiece (x2, y2) = True
+    | x1 /= x2 = False
+    | elem (x2, y2) forwards && not (hasPiece (x2, y2)) = False
     | otherwise = False
-        where hasPiece pos = emptyCell pos board 
+        where 
+            hasPiece pos = emptyCell pos board 
+            p = player (board ! (x1, y1))
+            forwards = if p == White
+                then [(x1, y1 + 1)] ++ if (x1 == 2 && (not . hasPiece) (x1, y1 + 1)) then [(x1, y1 + 2)] else []
+                else [(x1, y1 - 1)] ++ if (x1 == 7 && (not . hasPiece) (x1, y1 - 1)) then [(x1, y1 - 2)] else []
+            diags = if p == White 
+                        then filter (\x -> hasPiece x && isValidPos x)[(x1 + 1, y1 + 1), (x1 - 1, y1 + 1)]
+                        else filter (\x -> hasPiece x && isValidPos x)[(x1 + 1, y1 - 1), (x1 - 1, y1 - 1)]
 
 validPieceMove :: Piece -> ChessMove -> ChessBoard -> Bool
 --validPieceMove Pawn = validPawnMove
