@@ -35,6 +35,13 @@ checkPawn p (x, y) board = length pawns /= 0
         positions = (filter isValidPos . map (\offX -> (offX, yOffset))) [x + 1, x - 1]
         yOffset = if p == White then 1 else -1
 
+getKingMoves :: (Int, Int) -> [(Int, Int)]
+getKingMoves (x, y) = positions 
+    where
+        positions = (filter isValidPos . map (\(offX, offY) -> (x + offX, y + offY))) offsets
+        offsets = foldl (++) [] $ map (\off1 -> (map (\off2 -> (off1, off2)) [-1..1])) [-1..1]
+ 
+
 checkKing :: Player -> (Int, Int) -> ChessBoard -> Bool
 checkKing p (x, y) board = length king /= 0
     where 
@@ -43,6 +50,12 @@ checkKing p (x, y) board = length king /= 0
         pieces = map (\position -> board ! position) positions 
         positions = (filter isValidPos . map (\(offX, offY) -> (x + offX, y + offY))) offsets
         offsets = foldl (++) [] $ map (\off1 -> (map (\off2 -> (off1, off2)) [-1..1])) [-1..1]
+
+getKnightMoves :: (Int, Int) -> [(Int, Int)]
+getKnightMoves (x, y) = positions 
+        where 
+            positions = (filter isValidPos . map (\(offX, offY) -> (x + offX, y + offY))) offsets ++ reverse offsets 
+            offsets = [(2, 1), (1, 2), (-2, 1), (2, -1), (-2, -1)]
 
 checkKnight :: Player -> (Int, Int) -> ChessBoard -> Bool
 checkKnight p (x, y) board = length knights /= 0
@@ -62,6 +75,23 @@ horizontalLine y = map (\x -> (x, y))
 stepLine :: Int -> (Int, Int) -> (Int, Int) -> [(Int, Int)]
 stepLine length (x, y) (stepX, stepY) = map getStep [1..length]
     where getStep currStep = (x + currStep * stepX, y + currStep * stepY) 
+
+-- Get positions while cells are empty -- 
+beamLine :: Int -> (Int, Int) -> (Int, Int) -> ChessBoard -> [(Int, Int)]
+beamLine len (x, y) (stepX, stepY) board = removeIfSamePlayer free
+    where
+        free = takeWhileWithFirst (\p -> emptyCell p board) moves
+        moves = filter isValidPos . map (\i -> (x + i * stepX, y + i*stepY)) $ [1..len] 
+        p = player $ board ! (x, y)
+        removeIfSamePlayer :: [(Int, Int)] -> [(Int, Int)]
+        removeIfSamePlayer [] = []
+        removeIfSamePlayer moves
+            | Space == board ! (head . reverse) moves = moves
+            | otherwise = let last = (head . reverse) moves 
+            in if let f pos = p ==  (player (board ! pos)) 
+                in f last 
+                then take ((length moves) - 1) moves
+                else moves
 
 checkVerticalAttack :: Player -> (Int, Int) -> ChessBoard -> Bool
 checkVerticalAttack p (x, y) board = 
@@ -113,6 +143,32 @@ rawMovePiece ((x1, y1), (x2, y2)) m = (setElem Space p1   . setElem piece p2) m
         p1 = (x1, y1)
         p2 = (x2, y2)
 
+getRookMoves :: (Int, Int) -> ChessBoard -> [(Int, Int)]
+getRookMoves from board = foldl (++) [] moves
+    where 
+        p = player $ board ! from
+        moves = map (\step -> beamLine 8 from step board) steps
+        steps = [(1, 0) ,(0, 1), (-1, 0), (0, -1)]
+
+getBishopMoves :: (Int, Int) -> ChessBoard -> [(Int, Int)]
+getBishopMoves from board = foldl (++) [] moves
+    where 
+        p = player $ board ! from
+        moves = map (\step -> beamLine 8 from step board) steps
+        steps = [(1, 1) ,(1, -1), (-1, 1), (-1, -1)]
+
+getQueenMoves :: (Int, Int) -> ChessBoard -> [(Int, Int)]
+getQueenMoves from board = (getRookMoves from board) ++ (getBishopMoves from board)
+
+validBishopmove :: ChessMove -> ChessBoard -> Bool
+validBishopmove (from, to) board = False
+
+validKingMove :: ChessMove -> ChessBoard -> Bool
+validKingMove (from, to) _ = elem to $ getKnightMoves from
+
+validKnightMove :: ChessMove -> ChessBoard -> Bool
+validKnightMove (from, to) _ = elem to $ getKnightMoves from
+
 validPawnMove :: ChessMove -> ChessBoard -> Bool
 validPawnMove ((x1, y1), (x2, y2)) board 
     | elem (x2, y2) diags && hasPiece (x2, y2) = True
@@ -128,9 +184,19 @@ validPawnMove ((x1, y1), (x2, y2)) board
                         then (filter hasPiece . filter isValidPos) [(x1 + 1, y1 - 1), (x1 - 1, y1 - 1)]
                         else (filter hasPiece . filter isValidPos) [(x1 + 1, y1 + 1), (x1 + 1, y1 + 1)]
 
+validRookMove :: ChessMove -> ChessBoard -> Bool
+validRookMove (from, to) board =  elem to $ getRookMoves from board
+
+validQueenMove :: ChessMove -> ChessBoard -> Bool
+validQueenMove (from, to) board = elem to $ getQueenMoves from board
+
 validPieceMove :: Piece -> ChessMove -> ChessBoard -> Bool
 validPieceMove Pawn = validPawnMove
-validPieceMove _ = \m b -> True
+validPieceMove Knight = validKnightMove
+validPieceMove King = validKingMove
+validPieceMove Rook = validRookMove
+validPieceMove Bishop = validBishopmove
+validPieceMove Queen = validQueenMove
 
 validChessMove :: Player -> ChessMove -> ChessBoard -> Bool
 validChessMove p (from, to) board
