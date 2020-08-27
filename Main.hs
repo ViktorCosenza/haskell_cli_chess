@@ -19,4 +19,4 @@ endGame player = putStrLn $ winnerMsg player
 
 
 main :: IO ()
-main = gameLoop White initialChessboard
+main = gameLoop White initialChessboard [""]

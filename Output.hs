@@ -16,6 +16,14 @@ pieceStr p
     | p == Queen  = "Q"
     | p == King   = "K"
 
+pieceLongStr p
+    | p == Pawn   = "Pawn"
+    | p == Rook   = "Rook"
+    | p == Knight = "Knight"
+    | p == Bishop = "Bishop"
+    | p == Queen  = "Queen"
+    | p == King   = "King"
+
 printChessboard :: ChessBoard -> IO ()
 printChessboard = putChunksLn . getChessboardStr
 
@@ -31,5 +39,5 @@ elemToChunk (r, c) e = if c == 8 then chunk <> "\n" else chunk
 
 chunkPiece :: ChessPiece -> Chunk
 chunkPiece Space                    = " ."
-chunkPiece (ChessPiece White piece) = " " <> pieceStr piece & fore green--(blue <> only256 blue)
-chunkPiece (ChessPiece Black piece) = " " <> pieceStr piece & fore magenta--(Rainbow.red <> Rainbow.only256 Rainbow.red)
+chunkPiece (ChessPiece White piece) = " " <> pieceStr piece & fore green
+chunkPiece (ChessPiece Black piece) = " " <> pieceStr piece & fore magenta

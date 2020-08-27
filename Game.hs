@@ -1,13 +1,34 @@
+{-# LANGUAGE FlexibleInstances, OverloadedStrings #-}
 module Game where
+import Data.Function ((&))
 import Data.Matrix(matrix, (!), setElem)
-
+import Data.String(fromString)
+import Rainbow(fore, red, bold, magenta, green, magenta, white, Chunk, putChunksLn, putChunkLn, putChunks)
 import Types
 import Input
 import Output
 import Utils
 
+
 emptyCell :: (Int, Int) -> ChessBoard -> Bool
 emptyCell = isEmpty Space
+
+hasOne :: ChessPiece -> ChessBoard -> Bool
+hasOne piece board = foldl f False board
+    where f prev next = prev || next == piece 
+
+isTeamPiece :: Player -> ChessBoard -> (Int, Int) -> Bool
+isTeamPiece pl board pos 
+    | not $ isValidPos pos = False
+    | piece == Space = False
+    | otherwise = player piece == pl 
+        where piece = board ! pos 
+
+filterTeamPieces :: Player -> ChessBoard -> [(Int, Int)] -> [(Int, Int)]
+filterTeamPieces player board = filter (not . isTeamPiece player board)
+
+hasKing :: Player -> ChessBoard -> Bool
+hasKing p = hasOne (ChessPiece p King)
 
 findFirst :: [(Int, Int)] -> ChessBoard -> ChessPiece
 findFirst ps board = first 
@@ -155,23 +176,29 @@ getBishopMoves from board = foldl (++) [] moves
     where 
         p = player $ board ! from
         moves = map (\step -> beamLine 8 from step board) steps
-        steps = [(1, 1) ,(1, -1), (-1, 1), (-1, -1)]
+        steps = [(1, 1), (1, -1), (-1, 1), (-1, -1)]
 
 getQueenMoves :: (Int, Int) -> ChessBoard -> [(Int, Int)]
 getQueenMoves from board = (getRookMoves from board) ++ (getBishopMoves from board)
 
 validBishopmove :: ChessMove -> ChessBoard -> Bool
-validBishopmove (from, to) board = False
+validBishopmove (from, to) board = elem to $ (getBishopMoves from board)
 
 validKingMove :: ChessMove -> ChessBoard -> Bool
-validKingMove (from, to) _ = elem to $ getKnightMoves from
+validKingMove (from, to) board = elem to $ moves
+    where 
+        moves = ((filterTeamPieces plr board)  . getKingMoves) from
+        plr = player $ board ! from
 
 validKnightMove :: ChessMove -> ChessBoard -> Bool
-validKnightMove (from, to) _ = elem to $ getKnightMoves from
+validKnightMove (from, to) board = elem to $ moves
+    where 
+        moves = ((filterTeamPieces plr board)  . getKnightMoves) from
+        plr = player $ board ! from
 
 validPawnMove :: ChessMove -> ChessBoard -> Bool
 validPawnMove ((x1, y1), (x2, y2)) board 
-    | elem (x2, y2) diags && hasPiece (x2, y2) = True
+    | elem (x2, y2) diags && not (isTeamPiece p board (x2, y2)) = True
     | elem (x2, y2) forwards && not (hasPiece (x2, y2)) = True
     | otherwise = False
         where 
@@ -181,8 +208,8 @@ validPawnMove ((x1, y1), (x2, y2)) board
                 then [(x1 - 1, y1)] ++ if (x1 == 7 && (not . hasPiece) (x1 - 1, y1)) then [(x1 - 2, y1)] else []
                 else [(x1 + 1, y1)] ++ if (x1 == 2 && (not . hasPiece) (x1 + 1, y1)) then [(x1 + 2, y1)] else []
             diags = if p == White 
-                        then (filter hasPiece . filter isValidPos) [(x1 + 1, y1 - 1), (x1 - 1, y1 - 1)]
-                        else (filter hasPiece . filter isValidPos) [(x1 + 1, y1 + 1), (x1 + 1, y1 + 1)]
+                        then filter hasPiece $ ((filterTeamPieces p board) . filter isValidPos) [(x1 - 1, y1 - 1), (x1 - 1, y1 + 1)]
+                        else filter hasPiece $ ((filterTeamPieces p board) . filter isValidPos) [(x1 + 1, y1 - 1), (x1 + 1, y1 + 1)]
 
 validRookMove :: ChessMove -> ChessBoard -> Bool
 validRookMove (from, to) board =  elem to $ getRookMoves from board
@@ -198,41 +225,68 @@ validPieceMove Rook = validRookMove
 validPieceMove Bishop = validBishopmove
 validPieceMove Queen = validQueenMove
 
-validChessMove :: Player -> ChessMove -> ChessBoard -> Bool
+validChessMove :: Player -> ChessMove -> ChessBoard -> (Bool, Chunk, Chunk)
 validChessMove p (from, to) board
-    | chesspiece == Space = False
-    | p /= player chesspiece = False
-    | otherwise = validPieceMove rawPiece (from, to) board
+    | chesspiece == Space = (False, "No piece there!", "")
+    | p /= player chesspiece = (False, "Not your piece!", "")
+    | otherwise = (validPieceMove rawPiece (from, to) board, "Invalid " <> pieceLongStr rawPiece <> " move!", pieceLongStr rawPiece)
     where 
         chesspiece = board ! from
         rawPiece = piece chesspiece 
 
-gameTick :: Player -> ChessBoard -> String -> (Player, ChessBoard)
+gameTick :: Player -> ChessBoard -> [Char] -> (Player, ChessBoard, Chunk, Chunk, Bool)
 gameTick p board moveStr
-    | not (validChessMove p move board) = (p, board)
-    | otherwise = (nextPlayer p, rawMovePiece move board)
+    | not validMove = (p, board, reason, "", False)
+    | otherwise = (nextPlayer p, rawMovePiece move board, "", pStr, took)
         where 
+            (validMove, reason, pStr) = (validChessMove p move board) 
+            took = not $ emptyCell (snd move) board 
             move = toChessMove (moveStr)
             nextPlayer White = Black
             nextPlayer Black = White
 
-gameLoop :: Player -> ChessBoard -> IO() 
-gameLoop player board = do
-    printChessboard board
-    putStrLn $ show player ++ " to move:"
+otherPlayer :: Player -> Player
+otherPlayer White = Black
+otherPlayer Black = White
 
-    {-- Parse user input and check--}
-    (isValidMove, moveStr) <- parseInput
-    
-    putStrLn $ "Valid: " ++ show isValidMove
-    putStrLn $ "Move: " ++ show moveStr
+playerColor :: Player -> Chunk -> Chunk
+playerColor White = fore green
+playerColor Black = fore magenta
+
+gameLoop :: Player -> ChessBoard -> [Chunk] -> IO() 
+gameLoop player board message = do
     {-- Next move --}
-    if not isValidMove then gameLoop player board
-    else let (nextPlayer, nextBoard) = gameTick player board moveStr
-        in if nextPlayer == player 
-            then do
-                putStrLn $ "Invalid move! Try again..."
-                gameLoop nextPlayer nextBoard
-            else do 
-                putStr $ "Moved"
-                gameLoop nextPlayer nextBoard
+    if not $ hasKing player board then 
+        putChunks [
+            "\n",
+            bold (fromString $ show $ otherPlayer player) & (playerColor (otherPlayer player)), 
+            bold " Won!!!!\n"
+            ]
+    else do
+        printChessboard board
+        putChunks message
+        putChunks $ [(if player == White 
+            then "White" & playerColor White
+            else "Black" & playerColor Black), " to move:"]
+        
+        {-- Parse user input and check--}
+        (isValidMove, moveStr) <- parseInput
+
+        if not isValidMove 
+            then gameLoop player board ["Invalid move input! Use ", bold "A-H 1-8\n", "For example: ", bold "'b1c3'\n"]
+            else let (nextPlayer, nextBoard, reason, pStr, took) = gameTick player board moveStr
+                in if nextPlayer == player 
+                    then do
+                        gameLoop nextPlayer nextBoard [
+                            "Invalid move, try again... Reason: ",
+                            bold $ reason & fore red,
+                            "\n" 
+                            ]
+                    else do 
+                        gameLoop nextPlayer nextBoard [
+                            bold $ fromString (take 2 moveStr) <> " ",
+                            bold pStr & playerColor player,
+                            if took then " takes on " else " to ",
+                            bold $ fromString (drop 2 moveStr),
+                            "\n"
+                            ]
