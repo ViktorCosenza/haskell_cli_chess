@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleInstances, OverloadedStrings #-}
 module Game where
 import Data.Function ((&))
-import Data.Matrix(matrix, (!), setElem)
+import Data.Matrix(matrix, (!), setElem, mapPos)
 import Data.String(fromString)
 import Rainbow(fore, red, bold, magenta, green, magenta, white, Chunk, putChunksLn, putChunkLn, putChunks)
 import Types
@@ -234,10 +234,17 @@ validChessMove p (from, to) board
         chesspiece = board ! from
         rawPiece = piece chesspiece 
 
+promotePawns :: ChessBoard -> ChessBoard
+promotePawns = mapPos f
+    where f (x, _) pc
+            | pc == Space || piece pc /= Pawn = pc
+            | x == 1 || x == 8 = let plr = player pc in ChessPiece plr Queen 
+            | otherwise = pc
+
 gameTick :: Player -> ChessBoard -> [Char] -> (Player, ChessBoard, Chunk, Chunk, Bool)
 gameTick p board moveStr
     | not validMove = (p, board, reason, "", False)
-    | otherwise = (nextPlayer p, rawMovePiece move board, "", pStr, took)
+    | otherwise = (nextPlayer p, (promotePawns . rawMovePiece move) board, "", pStr, took)
         where 
             (validMove, reason, pStr) = (validChessMove p move board) 
             took = not $ emptyCell (snd move) board 
